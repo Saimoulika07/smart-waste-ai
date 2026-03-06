@@ -77,12 +77,18 @@
             let colorClass = 'marker-green';
             if (level === 'High') colorClass = 'marker-red';
             if (level === 'Medium') colorClass = 'marker-yellow';
+            if (level === 'Hub') colorClass = 'marker-hub'; // Special class for municipality hub
+
+            let htmlContent = `<div class="custom-marker ${colorClass}" style="width: 24px; height: 24px;"></div>`;
+            if (level === 'Hub') {
+                htmlContent = `<div class="custom-marker ${colorClass}" style="width: 32px; height: 32px; background-color: #3498db; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">HQ</div>`;
+            }
 
             return L.divIcon({
                 className: 'leaflet-div-icon',
-                html: `<div class="custom-marker ${colorClass}" style="width: 24px; height: 24px;"></div>`,
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
+                html: htmlContent,
+                iconSize: level === 'Hub' ? [32, 32] : [24, 24],
+                iconAnchor: level === 'Hub' ? [16, 16] : [12, 12]
             });
         }
 
@@ -96,11 +102,26 @@
                 const res = await fetch('/predict_hotspots');
                 const data = await res.json();
 
+                // Add Municipality Hub marker
+                const hubMarker = L.marker([13.6288, 79.4192], { icon: createCustomIcon('Hub') })
+                    .bindPopup(`<b>Municipal Corporation HQ</b><br/>Starting point for trucks.`)
+                    .addTo(map);
+                markers.push(hubMarker);
+
                 // Add markers
                 data.predictions.forEach(p => {
                     const icon = createCustomIcon(p.level);
+
+                    let popupContent = `<b>Waste Level:</b> ${p.level}<br/><b>Lat:</b> ${p.lat.toFixed(4)}<br/><b>Lng:</b> ${p.lng.toFixed(4)}`;
+
+                    if (p.image) {
+                        popupContent += `<br/><div style="margin-top: 8px;"><b>Evidence:</b><br/><img src="${p.image}" style="max-width: 150px; max-height: 150px; border-radius: 4px; border: 1px solid #ccc; margin-top: 4px;" alt="Waste Evidence"/></div>`;
+                    } else {
+                        popupContent += `<br/><div style="margin-top: 8px; color: #888; font-style: italic;">No evidence image provided.</div>`;
+                    }
+
                     const marker = L.marker([p.lat, p.lng], { icon: icon })
-                        .bindPopup(`<b>Waste Level:</b> ${p.level}<br/><b>Lat:</b> ${p.lat.toFixed(4)}<br/><b>Lng:</b> ${p.lng.toFixed(4)}`)
+                        .bindPopup(popupContent)
                         .addTo(map);
                     markers.push(marker);
                 });

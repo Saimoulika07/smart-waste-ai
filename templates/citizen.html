@@ -25,9 +25,28 @@
             <h2>Report Garbage Hub</h2>
             <p class="info-text">Help keep our city clean. Click on the map to pinpoint the exact location of the waste.
             </p>
-            <div id="map" class="map-container"></div>
+            <div id="map" class="map-container" style="height: 400px;"></div>
 
-            <div class="controls">
+            <div class="camera-section">
+                <h3>Optional: Capture Evidence</h3>
+                <div class="camera-container" id="cameraContainer"
+                    style="display: none; width: 100%; border-radius: 12px; overflow: hidden; margin-bottom: 15px;">
+                    <video id="cameraFeed" autoplay playsinline
+                        style="width: 100%; object-fit: cover; border-radius: 12px;"></video>
+                    <canvas id="photoCanvas" style="display: none;"></canvas>
+                    <img id="photoPreview"
+                        style="display: none; width: 100%; border-radius: 12px; border: 2px solid var(--primary-color);"
+                        alt="Captured Photo" />
+                </div>
+                <div class="controls" style="margin-top: 15px;">
+                    <button id="startCameraBtn" class="btn btn-secondary">Open Camera</button>
+                    <button id="captureBtn" class="btn pulse"
+                        style="display: none; background-color: var(--danger);">Take Photo</button>
+                    <button id="retakeBtn" class="btn btn-secondary" style="display: none;">Retake</button>
+                </div>
+            </div>
+
+            <div class="controls" style="margin-top: 30px;">
                 <button id="reportBtn" class="btn pulse" disabled>Report Waste</button>
             </div>
         </div>
@@ -54,6 +73,62 @@
 
         const reportBtn = document.getElementById('reportBtn');
         const toast = document.getElementById('toast');
+
+        // Camera Elements
+        const startCameraBtn = document.getElementById('startCameraBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const retakeBtn = document.getElementById('retakeBtn');
+        const cameraFeed = document.getElementById('cameraFeed');
+        const photoCanvas = document.getElementById('photoCanvas');
+        const photoPreview = document.getElementById('photoPreview');
+        const cameraContainer = document.getElementById('cameraContainer');
+
+        // Camera Logic
+        startCameraBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                cameraFeed.srcObject = stream;
+                cameraContainer.style.display = 'block';
+                cameraFeed.style.display = 'block';
+                startCameraBtn.style.display = 'none';
+                captureBtn.style.display = 'block';
+                photoPreview.style.display = 'none';
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                alert("Could not access the camera. Make sure you have granted permissions.");
+            }
+        });
+
+        captureBtn.addEventListener('click', () => {
+            // Draw video frame to canvas
+            photoCanvas.width = cameraFeed.videoWidth;
+            photoCanvas.height = cameraFeed.videoHeight;
+            const ctx = photoCanvas.getContext('2d');
+            ctx.drawImage(cameraFeed, 0, 0, photoCanvas.width, photoCanvas.height);
+
+            // Get image data URL
+            capturedImageData = photoCanvas.toDataURL('image/jpeg', 0.8);
+
+            // Show preview
+            photoPreview.src = capturedImageData;
+            photoPreview.style.display = 'block';
+            cameraFeed.style.display = 'none';
+
+            // Toggle buttons
+            captureBtn.style.display = 'none';
+            retakeBtn.style.display = 'block';
+
+            // Stop camera stream to save power
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        retakeBtn.addEventListener('click', async () => {
+            capturedImageData = null;
+            retakeBtn.style.display = 'none';
+            startCameraBtn.click(); // Re-open camera
+        });
 
         // Handle map clicks
         map.on('click', function (e) {
@@ -92,7 +167,8 @@
                     },
                     body: JSON.stringify({
                         latitude: selectedLat,
-                        longitude: selectedLng
+                        longitude: selectedLng,
+                        image: capturedImageData
                     })
                 });
 
@@ -107,6 +183,17 @@
                     currentMarker = null;
                     selectedLat = null;
                     selectedLng = null;
+                    capturedImageData = null;
+
+                    // Reset Camera UI
+                    cameraContainer.style.display = 'none';
+                    startCameraBtn.style.display = 'block';
+                    captureBtn.style.display = 'none';
+                    retakeBtn.style.display = 'none';
+                    photoPreview.style.display = 'none';
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
                 } else {
                     alert('Error reporting waste: ' + (data.error || 'Unknown error'));
                 }

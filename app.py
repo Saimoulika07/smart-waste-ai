@@ -24,11 +24,16 @@ def report_waste():
     data = request.json
     lat = data.get('latitude')
     lng = data.get('longitude')
+    image_data = data.get('image') # Optional base64 image data
     
     if lat is None or lng is None:
         return jsonify({"error": "Latitude and longitude are required"}), 400
         
-    reports.append({"lat": lat, "lng": lng})
+    reports.append({
+        "lat": lat, 
+        "lng": lng,
+        "image": image_data
+    })
     return jsonify({"message": "Waste reported successfully", "status": "success"})
 
 @app.route('/get_reports', methods=['GET'])
