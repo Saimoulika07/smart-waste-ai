@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Municipality Dashboard | Smart Waste Management</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .leaflet-div-icon {
+            background: transparent;
+            border: none;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Smart Waste Management for Tirupati</h1>
+        <nav>
+            <a href="/citizen">Citizen Reporting</a>
+            <a href="/dashboard" class="active">Municipality Dashboard</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="card" style="max-width: 1200px;">
+            <h2>Waste Control Center</h2>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="color-box color-red"></div> High Waste AI Pred
+                </div>
+                <div class="legend-item">
+                    <div class="color-box color-yellow"></div> Medium Waste AI Pred
+                </div>
+                <div class="legend-item">
+                    <div class="color-box color-green"></div> Low Waste AI Pred
+                </div>
+                <div class="legend-item" style="margin-left: 20px;">
+                    <svg width="40" height="15">
+                        <path d="M0,7 L40,7" stroke="#3498db" stroke-width="4" stroke-dasharray="5,5" />
+                    </svg>
+                    Optimized Truck Route
+                </div>
+            </div>
+
+            <div id="map" class="map-container" style="height: 600px;"></div>
+
+            <div class="controls">
+                <button id="refreshBtn" class="btn btn-secondary">Refresh Map Data</button>
+                <button id="optimizeBtn" class="btn pulse">Compute Optimized Route</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        // Initialize map centered on Tirupati
+        const map = L.map('map').setView([13.6288, 79.4192], 13);
+
+        // Add OpenStreetMap tiles (Dark Mode variant via CARTO)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors & CARTO'
+        }).addTo(map);
+
+        let markers = [];
+        let routeLayer = null;
+
+        function createCustomIcon(level) {
+            let colorClass = 'marker-green';
+            if (level === 'High') colorClass = 'marker-red';
+            if (level === 'Medium') colorClass = 'marker-yellow';
+
+            return L.divIcon({
+                className: 'leaflet-div-icon',
+                html: `<div class="custom-marker ${colorClass}" style="width: 24px; height: 24px;"></div>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+        }
+
+        async function loadData() {
+            try {
+                // Clear existing markers
+                markers.forEach(m => map.removeLayer(m));
+                markers = [];
+
+                // Fetch predictions (combines reports + AI predictions)
+                const res = await fetch('/predict_hotspots');
+                const data = await res.json();
+
+                // Add markers
+                data.predictions.forEach(p => {
+                    const icon = createCustomIcon(p.level);
+                    const marker = L.marker([p.lat, p.lng], { icon: icon })
+                        .bindPopup(`<b>Waste Level:</b> ${p.level}<br/><b>Lat:</b> ${p.lat.toFixed(4)}<br/><b>Lng:</b> ${p.lng.toFixed(4)}`)
+                        .addTo(map);
+                    markers.push(marker);
+                });
+
+            } catch (error) {
+                console.error("Error loading data:", error);
+            }
+        }
+
+        async function computeRoute() {
+            try {
+                const btn = document.getElementById('optimizeBtn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Computing...';
+                btn.disabled = true;
+
+                const res = await fetch('/optimize_route');
+                const data = await res.json();
+
+                if (routeLayer) {
+                    map.removeLayer(routeLayer);
+                }
+
+                if (data.route && data.route.length > 0) {
+                    // Create basic dashed polyline
+                    routeLayer = L.polyline(data.route, {
+                        color: '#3498db',
+                        weight: 5,
+                        opacity: 0.8,
+                        dashArray: '10, 15',
+                        lineJoin: 'round'
+                    }).addTo(map);
+
+                    // Fit bounds to route
+                    map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+                }
+
+                btn.textContent = originalText;
+                btn.disabled = false;
+            } catch (error) {
+                console.error("Error computing route:", error);
+                document.getElementById('optimizeBtn').textContent = 'Compute Optimized Route';
+                document.getElementById('optimizeBtn').disabled = false;
+                alert("Failed to compute route");
+            }
+        }
+
+        document.getElementById('refreshBtn').addEventListener('click', loadData);
+        document.getElementById('optimizeBtn').addEventListener('click', computeRoute);
+
+        // Load initially
+        loadData();
+    </script>
+</body>
+
+</html>

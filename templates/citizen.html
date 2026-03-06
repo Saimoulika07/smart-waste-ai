@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Citizen Reporting | Smart Waste Management</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <header>
+        <h1>Smart Waste Management for Tirupati</h1>
+        <nav>
+            <a href="/citizen" class="active">Citizen Reporting</a>
+            <a href="/dashboard">Municipality Dashboard</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="card">
+            <h2>Report Garbage Hub</h2>
+            <p class="info-text">Help keep our city clean. Click on the map to pinpoint the exact location of the waste.
+            </p>
+            <div id="map" class="map-container"></div>
+
+            <div class="controls">
+                <button id="reportBtn" class="btn pulse" disabled>Report Waste</button>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast">✅ Waste reported successfully!</div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        // Initialize map centered on Tirupati
+        const map = L.map('map').setView([13.6288, 79.4192], 13);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors & CARTO'
+        }).addTo(map);
+
+        let currentMarker = null;
+        let selectedLat = null;
+        let selectedLng = null;
+
+        const reportBtn = document.getElementById('reportBtn');
+        const toast = document.getElementById('toast');
+
+        // Handle map clicks
+        map.on('click', function (e) {
+            selectedLat = e.latlng.lat;
+            selectedLng = e.latlng.lng;
+
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+
+            // Highlight selected spot
+            currentMarker = L.circleMarker([selectedLat, selectedLng], {
+                radius: 8,
+                fillColor: "#ff9800",
+                color: "#fff",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+
+            reportBtn.disabled = false;
+        });
+
+        // Handle report submission
+        reportBtn.addEventListener('click', async () => {
+            if (!selectedLat || !selectedLng) return;
+
+            reportBtn.disabled = true;
+            reportBtn.textContent = 'Reporting...';
+
+            try {
+                const response = await fetch('/report_waste', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        latitude: selectedLat,
+                        longitude: selectedLng
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    toast.classList.add('show');
+                    setTimeout(() => toast.classList.remove('show'), 3000);
+
+                    // Reset
+                    map.removeLayer(currentMarker);
+                    currentMarker = null;
+                    selectedLat = null;
+                    selectedLng = null;
+                } else {
+                    alert('Error reporting waste: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to connect to server');
+            } finally {
+                reportBtn.disabled = true;
+                reportBtn.textContent = 'Report Waste';
+            }
+        });
+    </script>
+</body>
+
+</html>
